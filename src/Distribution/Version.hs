@@ -4,9 +4,11 @@
 module Distribution.Version (
   -- * Package versions
   Version,
+  mkVersion0,
   mkVersion,
   mkVersion1,
   mkVersion2,
+  mkVersion3,
 
   mkVersion',
   versionNumbers,
@@ -23,6 +25,7 @@ import Data.Data
 import GHC.Generics
 import Control.DeepSeq
 import Data.Bits (shiftL, shiftR, (.|.), (.&.))
+import Data.Bits (unsafeShiftL)
 import Data.Word
 
 -- -----------------------------------------------------------------------------
@@ -85,6 +88,15 @@ instance Text Version where
       parseNat = read `fmap` Parse.munch1 isDigit
 -}
 
+-- minimal version for a lower bound
+mkVersion0 :: [Int] -> Version
+mkVersion0 []            = nullVersion
+mkVersion0 [v1]          = PV0 (fromIntegral $ v1)
+mkVersion0 [v1,v2]       = PV0 (fromIntegral $ v1+v2)
+mkVersion0 [v1,v2,v3]    = PV0 (fromIntegral $ v1+v2+v3)
+mkVersion0 [v1,v2,v3,v4] = PV0 (fromIntegral $ v1+v2+v3+v4)
+mkVersion0 (v1:vs)       = PV1 v1 vs
+
 -- | original version
 mkVersion :: [Int] -> Version
 -- TODO: add validity check; disallow 'mkVersion []' (we have
@@ -108,37 +120,31 @@ mkVersion ns = case ns of
                         .|. (fromIntegral v3 `shiftL` 16)
                         .|.  fromIntegral v4
 
-mkVersion1 :: [Int] -> Maybe Version
+mkVersion1 :: [Int] -> Version
 mkVersion1 ns = case ns of
-    [] -> Nothing
+    [] -> nullVersion
 
     [v1]
-      | v1 < 0 -> Nothing
       | v1 <= 0xfffe
-        -> Just $! PV0 (mkW64 (v1+1) 0 0 0)
-      | otherwise -> Just (PV1 v1 [])
+                  -> PV0 (mkW64 (v1+1) 0 0 0)
+      | otherwise -> PV1 v1 []
 
     [v1,v2]
-      | not (v1 >= 0 && v2 >= 0) -> Nothing
       | v1 <= 0xfffe, v2 <= 0xfffe
-        -> Just $! PV0 (mkW64 (v1+1) (v2+1) 0 0)
-      | otherwise -> Just (PV1 v1 [v2])
+                  -> PV0 (mkW64 (v1+1) (v2+1) 0 0)
+      | otherwise -> PV1 v1 [v2]
 
     [v1,v2,v3]
-      | not (v1 >= 0 && v2 >= 0 && v3 >= 0) -> Nothing
       | v1 <= 0xfffe, v2 <= 0xfffe, v3 <= 0xfffe
-        -> Just $! PV0 (mkW64 (v1+1) (v2+1) (v3+1) 0)
-      | otherwise -> Just (PV1 v1 [v2,v3])
+                  -> PV0 (mkW64 (v1+1) (v2+1) (v3+1) 0)
+      | otherwise -> PV1 v1 [v2,v3]
 
     [v1,v2,v3,v4]
-      | not (v1 >= 0 && v2 >= 0 && v3 >= 0 && v4 >= 0) -> Nothing
       | v1 <= 0xfffe, v2 <= 0xfffe, v3 <= 0xfffe, v4 <= 0xfffe
-        -> Just $! PV0 (mkW64 (v1+1) (v2+1) (v3+1) (v4+1))
-      | otherwise -> Just (PV1 v1 [v2,v3,v4])
+                  -> PV0 (mkW64 (v1+1) (v2+1) (v3+1) (v4+1))
+      | otherwise -> PV1 v1 [v2,v3,v4]
 
-    v1:v2:v3:v4:v5:vs
-      | (v1 .|. v2 .|. v3 .|. v4 .|. v5 < 0) || (any (<0) vs) -> Nothing
-      | otherwise -> Just (PV1 v1 (v2:v3:v4:v5:vs))
+    v1:v2:v3:v4:v5:vs -> PV1 v1 (v2:v3:v4:v5:vs)
   where
     {-# INLINE mkW64 #-}
     mkW64 :: Int -> Int -> Int -> Int -> Word64
@@ -148,37 +154,31 @@ mkVersion1 ns = case ns of
                         .|.  fromIntegral v4
 
 
-mkVersion2 :: [Int] -> Maybe Version
+mkVersion2 :: [Int] -> Version
 mkVersion2 ns = case ns of
-    [] -> Nothing
+    [] -> nullVersion
 
     [v1]
-      | v1 < 0 -> Nothing
-      | v1 <= 0xfffe
-        -> Just $! PV0 (mkW64 (v1+1) 0 0 0)
-      | otherwise -> Just (PV1 v1 [])
+      | inW16 (v1+1)
+                  -> PV0 (mkW64 (v1+1) 0 0 0)
+      | otherwise -> PV1 v1 []
 
     [v1,v2]
-      | v1 .|. v2 < 0 -> Nothing
       | inW16 ((v1+1) .|. (v2+1))
-        -> Just $! PV0 (mkW64 (v1+1) (v2+1) 0 0)
-      | otherwise -> Just (PV1 v1 [v2])
+                  -> PV0 (mkW64 (v1+1) (v2+1) 0 0)
+      | otherwise -> PV1 v1 [v2]
 
     [v1,v2,v3]
-      | v1 .|. v2 .|. v3 < 0 -> Nothing
       | inW16 ((v1+1) .|. (v2+1) .|. (v3+1))
-        -> Just $! PV0 (mkW64 (v1+1) (v2+1) (v3+1) 0)
-      | otherwise -> Just (PV1 v1 [v2,v3])
+                  -> PV0 (mkW64 (v1+1) (v2+1) (v3+1) 0)
+      | otherwise -> PV1 v1 [v2,v3]
 
     [v1,v2,v3,v4]
-      | v1 .|. v2 .|. v3 .|. v4 < 0 -> Nothing
       | inW16 ((v1+1) .|. (v2+1) .|. (v3+1) .|. (v4+1))
-        -> Just $! PV0 (mkW64 (v1+1) (v2+1) (v3+1) (v4+1))
-      | otherwise -> Just (PV1 v1 [v2,v3,v4])
+                  -> PV0 (mkW64 (v1+1) (v2+1) (v3+1) (v4+1))
+      | otherwise -> PV1 v1 [v2,v3,v4]
 
-    v1:v2:v3:v4:v5:vs
-      | (v1 .|. v2 .|. v3 .|. v4 .|. v5 < 0) || (any (<0) vs) -> Nothing
-      | otherwise -> Just (PV1 v1 (v2:v3:v4:v5:vs))
+    v1:v2:v3:v4:v5:vs -> PV1 v1 (v2:v3:v4:v5:vs)
   where
     {-# INLINE mkW64 #-}
     mkW64 :: Int -> Int -> Int -> Int -> Word64
@@ -189,6 +189,75 @@ mkVersion2 ns = case ns of
 
     inW16 x = (fromIntegral x :: Word) <= 0xffff
     -- inW16 x = x <= 0xffff && x >= 0
+
+mkVersion3 :: [Int] -> Version
+mkVersion3 []                   = nullVersion
+mkVersion3 (v1:[])
+  | inWord16VerRep1 v1          = PV0 (mkWord64VerRep1 v1)
+  | otherwise                   = PV1 v1 []
+mkVersion3 (v1:vs@(v2:[]))
+  | inWord16VerRep2 v1 v2       = PV0 (mkWord64VerRep2 v1 v2)
+  | otherwise                   = PV1 v1 vs
+mkVersion3 (v1:vs@(v2:v3:[]))
+  | inWord16VerRep3 v1 v2 v3    = PV0 (mkWord64VerRep3 v1 v2 v3)
+  | otherwise                   = PV1 v1 vs
+mkVersion3 (v1:vs@(v2:v3:v4:[]))
+  | inWord16VerRep4 v1 v2 v3 v4 = PV0 (mkWord64VerRep4 v1 v2 v3 v4)
+  | otherwise                   = PV1 v1 vs
+mkVersion3 (v1:vs)              = PV1 v1 vs
+
+mkWord64VerRep1 :: Int -> Word64
+mkWord64VerRep1 v1 =
+      (fromIntegral (v1+1) `unsafeShiftL` 48)
+
+mkWord64VerRep2 :: Int -> Int -> Word64
+mkWord64VerRep2 v1 v2 =
+      (fromIntegral (v1+1) `unsafeShiftL` 48)
+  .|. (fromIntegral (v2+1) `unsafeShiftL` 32)
+
+mkWord64VerRep3 :: Int -> Int -> Int -> Word64
+mkWord64VerRep3 v1 v2 v3 =
+      (fromIntegral (v1+1) `unsafeShiftL` 48)
+  .|. (fromIntegral (v2+1) `unsafeShiftL` 32)
+  .|. (fromIntegral (v3+1) `unsafeShiftL` 16)
+
+mkWord64VerRep4 :: Int -> Int -> Int -> Int -> Word64
+mkWord64VerRep4 v1 v2 v3 v4 =
+      (fromIntegral (v1+1) `unsafeShiftL` 48)
+  .|. (fromIntegral (v2+1) `unsafeShiftL` 32)
+  .|. (fromIntegral (v3+1) `unsafeShiftL` 16)
+  .|.  fromIntegral (v4+1)
+
+{-# INLINE inWord16 #-}
+inWord16 :: Int -> Bool
+inWord16 x = (fromIntegral x :: Word) <= 0xffff
+
+inWord16VerRep1 :: Int -> Bool
+inWord16VerRep1 x1 =
+    inWord16 (x1 .|. (x1+1))
+
+inWord16VerRep2 :: Int -> Int -> Bool
+inWord16VerRep2 x1 x2 =
+    inWord16 (x1 .|. (x1+1)
+          .|. x2 .|. (x2+1))
+
+inWord16VerRep3 :: Int -> Int -> Int -> Bool
+inWord16VerRep3 x1 x2 x3 =
+    inWord16 (x1 .|. (x1+1)
+          .|. x2 .|. (x2+1)
+          .|. x3 .|. (x3+1))
+
+inWord16VerRep4 :: Int -> Int -> Int -> Int -> Bool
+inWord16VerRep4 x1 x2 x3 x4 =
+    inWord16 (x1 .|. (x1+1)
+          .|. x2 .|. (x2+1)
+          .|. x3 .|. (x3+1)
+          .|. x4 .|. (x4+1))
+
+--mkVersion3 :: [Int] -> Maybe Version
+--mkVersion3 ns = case ns of
+--    [] -> Nothing
+
 
 -- | Variant of 'Version' which converts a "Data.Version" 'Version'
 -- into Cabal's 'Version' type.

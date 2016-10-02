@@ -58,7 +58,9 @@ main = defaultMain
     -- putStrLn "Hello, Haskell!"
   where
     mkV vs = bgroup (show vs)
-        [ bench "mkVersion"   $ whnf mkVersion  vs
+        [ bench "mkVersion0"  $ whnf mkVersion0 vs
+        , bench "mkVersion"   $ whnf mkVersion  vs
         , bench "mkVersion1"  $ whnf mkVersion1 vs
         , bench "mkVersion2"  $ whnf mkVersion2 vs
+        , bench "mkVersion3"  $ whnf mkVersion3 vs
         ]
