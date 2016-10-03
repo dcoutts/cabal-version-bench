@@ -125,22 +125,24 @@ mkVersion1 ns = case ns of
     [] -> nullVersion
 
     [v1]
-      | v1 <= 0xfffe
+      | v1 >= 0 && v1 <= 0xfffe
                   -> PV0 (mkW64 (v1+1) 0 0 0)
       | otherwise -> PV1 v1 []
 
     [v1,v2]
-      | v1 <= 0xfffe, v2 <= 0xfffe
+      | v1 >= 0 && v1 <= 0xfffe && v2 >= 0 && v2 <= 0xfffe
                   -> PV0 (mkW64 (v1+1) (v2+1) 0 0)
       | otherwise -> PV1 v1 [v2]
 
     [v1,v2,v3]
-      | v1 <= 0xfffe, v2 <= 0xfffe, v3 <= 0xfffe
+      | v1 >= 0 && v1 <= 0xfffe && v2 >= 0 && v2 <= 0xfffe &&
+        v3 >= 0 && v3 <= 0xfffe
                   -> PV0 (mkW64 (v1+1) (v2+1) (v3+1) 0)
       | otherwise -> PV1 v1 [v2,v3]
 
     [v1,v2,v3,v4]
-      | v1 <= 0xfffe, v2 <= 0xfffe, v3 <= 0xfffe, v4 <= 0xfffe
+      | v1 >= 0 && v1 <= 0xfffe && v2 >= 0 && v2 <= 0xfffe &&
+        v3 >= 0 && v3 <= 0xfffe && v4 >= 0 && v4 <= 0xfffe
                   -> PV0 (mkW64 (v1+1) (v2+1) (v3+1) (v4+1))
       | otherwise -> PV1 v1 [v2,v3,v4]
 
@@ -159,22 +161,26 @@ mkVersion2 ns = case ns of
     [] -> nullVersion
 
     [v1]
-      | inW16 (v1+1)
+      | v1 >= 0
+      , inW16 (v1+1)
                   -> PV0 (mkW64 (v1+1) 0 0 0)
       | otherwise -> PV1 v1 []
 
     [v1,v2]
-      | inW16 ((v1+1) .|. (v2+1))
+      | v1 .|. v2 >= 0
+      , inW16 ((v1+1) .|. (v2+1))
                   -> PV0 (mkW64 (v1+1) (v2+1) 0 0)
       | otherwise -> PV1 v1 [v2]
 
     [v1,v2,v3]
-      | inW16 ((v1+1) .|. (v2+1) .|. (v3+1))
+      | v1 .|. v2 .|. v3 >= 0
+      , inW16 ((v1+1) .|. (v2+1) .|. (v3+1))
                   -> PV0 (mkW64 (v1+1) (v2+1) (v3+1) 0)
       | otherwise -> PV1 v1 [v2,v3]
 
     [v1,v2,v3,v4]
-      | inW16 ((v1+1) .|. (v2+1) .|. (v3+1) .|. (v4+1))
+      | v1 .|. v2 .|. v3 .|. v4 >= 0
+      , inW16 ((v1+1) .|. (v2+1) .|. (v3+1) .|. (v4+1))
                   -> PV0 (mkW64 (v1+1) (v2+1) (v3+1) (v4+1))
       | otherwise -> PV1 v1 [v2,v3,v4]
 
@@ -195,64 +201,50 @@ mkVersion3 []                   = nullVersion
 mkVersion3 (v1:[])
   | inWord16VerRep1 v1          = PV0 (mkWord64VerRep1 v1)
   | otherwise                   = PV1 v1 []
+  where
+    inWord16VerRep1 x1 = inWord16 (x1 .|. (x1+1))
+    mkWord64VerRep1 v1 = mkWord64VerRep (v1+1) 0 0 0
+
 mkVersion3 (v1:vs@(v2:[]))
   | inWord16VerRep2 v1 v2       = PV0 (mkWord64VerRep2 v1 v2)
   | otherwise                   = PV1 v1 vs
+  where
+    inWord16VerRep2 x1 x2 = inWord16 (x1 .|. (x1+1)
+                                  .|. x2 .|. (x2+1))
+    mkWord64VerRep2 v1 v2 = mkWord64VerRep (v1+1) (v2+1) 0 0
+
 mkVersion3 (v1:vs@(v2:v3:[]))
   | inWord16VerRep3 v1 v2 v3    = PV0 (mkWord64VerRep3 v1 v2 v3)
   | otherwise                   = PV1 v1 vs
+  where
+    inWord16VerRep3 x1 x2 x3 = inWord16 (x1 .|. (x1+1)
+                                     .|. x2 .|. (x2+1)
+                                     .|. x3 .|. (x3+1))
+    mkWord64VerRep3 v1 v2 v3 = mkWord64VerRep (v1+1) (v2+1) (v3+1) 0
+
 mkVersion3 (v1:vs@(v2:v3:v4:[]))
   | inWord16VerRep4 v1 v2 v3 v4 = PV0 (mkWord64VerRep4 v1 v2 v3 v4)
   | otherwise                   = PV1 v1 vs
+  where
+    inWord16VerRep4 x1 x2 x3 x4 = inWord16 (x1 .|. (x1+1)
+                                        .|. x2 .|. (x2+1)
+                                        .|. x3 .|. (x3+1)
+                                        .|. x4 .|. (x4+1))
+    mkWord64VerRep4 v1 v2 v3 v4 = mkWord64VerRep (v1+1) (v2+1) (v3+1) (v4+1)
+
 mkVersion3 (v1:vs)              = PV1 v1 vs
 
-mkWord64VerRep1 :: Int -> Word64
-mkWord64VerRep1 v1 =
-      (fromIntegral (v1+1) `unsafeShiftL` 48)
-
-mkWord64VerRep2 :: Int -> Int -> Word64
-mkWord64VerRep2 v1 v2 =
-      (fromIntegral (v1+1) `unsafeShiftL` 48)
-  .|. (fromIntegral (v2+1) `unsafeShiftL` 32)
-
-mkWord64VerRep3 :: Int -> Int -> Int -> Word64
-mkWord64VerRep3 v1 v2 v3 =
-      (fromIntegral (v1+1) `unsafeShiftL` 48)
-  .|. (fromIntegral (v2+1) `unsafeShiftL` 32)
-  .|. (fromIntegral (v3+1) `unsafeShiftL` 16)
-
-mkWord64VerRep4 :: Int -> Int -> Int -> Int -> Word64
-mkWord64VerRep4 v1 v2 v3 v4 =
-      (fromIntegral (v1+1) `unsafeShiftL` 48)
-  .|. (fromIntegral (v2+1) `unsafeShiftL` 32)
-  .|. (fromIntegral (v3+1) `unsafeShiftL` 16)
-  .|.  fromIntegral (v4+1)
+{-# INLINE mkWord64VerRep #-}
+mkWord64VerRep :: Int -> Int -> Int -> Int -> Word64
+mkWord64VerRep v1 v2 v3 v4 =
+      (fromIntegral v1 `shiftL` 48)
+  .|. (fromIntegral v2 `shiftL` 32)
+  .|. (fromIntegral v3 `shiftL` 16)
+  .|.  fromIntegral v4
 
 {-# INLINE inWord16 #-}
 inWord16 :: Int -> Bool
 inWord16 x = (fromIntegral x :: Word) <= 0xffff
-
-inWord16VerRep1 :: Int -> Bool
-inWord16VerRep1 x1 =
-    inWord16 (x1 .|. (x1+1))
-
-inWord16VerRep2 :: Int -> Int -> Bool
-inWord16VerRep2 x1 x2 =
-    inWord16 (x1 .|. (x1+1)
-          .|. x2 .|. (x2+1))
-
-inWord16VerRep3 :: Int -> Int -> Int -> Bool
-inWord16VerRep3 x1 x2 x3 =
-    inWord16 (x1 .|. (x1+1)
-          .|. x2 .|. (x2+1)
-          .|. x3 .|. (x3+1))
-
-inWord16VerRep4 :: Int -> Int -> Int -> Int -> Bool
-inWord16VerRep4 x1 x2 x3 x4 =
-    inWord16 (x1 .|. (x1+1)
-          .|. x2 .|. (x2+1)
-          .|. x3 .|. (x3+1)
-          .|. x4 .|. (x4+1))
 
 --mkVersion3 :: [Int] -> Maybe Version
 --mkVersion3 ns = case ns of
